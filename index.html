@@ -24,7 +24,7 @@ main{padding:16px;max-width:1200px;margin:0 auto}
 .sell{display:grid;grid-template-columns:1fr 360px;gap:16px}
 @media (max-width:860px){.sell,.grid2{grid-template-columns:1fr!important}}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-input,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:15px}
+input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:15px;font-family:inherit}
 .btn{border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;background:var(--brand);color:#fff;font-size:15px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.ghost{background:transparent;color:var(--brand);border:1px solid var(--border)}
@@ -109,13 +109,14 @@ td input{width:110px;padding:6px 8px}
   <button id="tabJualan" class="on" onclick="setTab('jualan')">Jualan</button>
   <button id="tabStok" onclick="setTab('stok')">Stok</button>
   <button id="tabLaporan" onclick="setTab('laporan')">Laporan</button>
+  <button id="tabTetapan" style="display:none" onclick="setTab('tetapan')">Tetapan</button>
 </nav>
 
 <main>
   <section id="pageJualan" class="sell">
     <div class="card">
       <div class="tools"><input id="search" placeholder="Cari produk atau imbas barcode..." oninput="S.search=this.value;renderProducts()" onkeydown="searchKey(event)"></div>
-      <div class="hint">Scanner barcode USB: scan terus di ruangan ini, produk akan masuk ke pesanan.</div>
+      <div class="hint">Scanner barcode USB: scan terus, produk akan masuk ke pesanan.</div>
       <div class="cats" id="cats"></div>
       <div class="prods" id="products"></div>
     </div>
@@ -180,6 +181,55 @@ td input{width:110px;padding:6px 8px}
       </div>
     </div>
   </section>
+
+  <section id="pageTetapan" style="display:none">
+    <div class="grid2">
+      <div class="card">
+        <h3 style="margin-top:0">Resit</h3>
+        <div class="field"><label>Nama kedai</label><input id="st_shopName"></div>
+        <div class="field"><label>Alamat / telefon (satu baris setiap satu)</label><textarea id="st_shopInfo" rows="3"></textarea></div>
+        <div class="field"><label>Teks bawah resit</label><input id="st_footer"></div>
+        <div class="field">
+          <label>Logo (ditukar kepada hitam putih, lebar maksimum 384px)</label>
+          <input type="file" id="st_logoFile" accept="image/*" onchange="onLogoPick(this)">
+          <div id="logoPreview" style="margin-top:8px"></div>
+          <button class="btn ghost" style="margin-top:6px" onclick="removeLogo()">Padam logo</button>
+        </div>
+        <div class="field"><label>Lebar kertas</label>
+          <select id="st_paper"><option value="58">58mm (Xprinter XP-58)</option><option value="80">80mm</option></select>
+        </div>
+        <div class="field"><label>Saiz font (px)</label>
+          <select id="st_font"><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option></select>
+        </div>
+        <div class="field"><label>Jenis font</label>
+          <select id="st_family">
+            <option value="monospace">Monospace</option>
+            <option value="'Courier New', monospace">Courier New</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="'Segoe UI', sans-serif">Segoe UI</option>
+          </select>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Printer</h3>
+        <div class="field"><label>Nama printer (rujukan)</label><input id="st_printer"></div>
+        <div class="hint">Browser tak boleh pilih printer atau cetak senyap tanpa setup tambahan. Pastikan printer lalai di Windows ialah Xprinter dan saiz kertas 58mm.</div>
+        <button class="btn ghost block" onclick="testPrint()">Cetak resit ujian</button>
+
+        <h3 style="margin-top:24px">Scanner</h3>
+        <div class="field"><label>Had jeda antara aksara (ms, 30 hingga 500)</label><input id="st_scanGap" type="number" min="30" max="500"></div>
+        <label style="display:flex;gap:8px;align-items:center;margin-bottom:12px;font-size:14px">
+          <input type="checkbox" id="st_scanAuto" style="width:auto"> Scan terus masuk ke pesanan
+        </label>
+        <div class="hint">Jika ditutup, scan hanya mengisi ruangan carian.</div>
+
+        <div style="display:flex;gap:8px;margin-top:18px">
+          <button class="btn ghost" style="flex:1" onclick="resetSettings()">Reset</button>
+          <button class="btn block" style="flex:2" onclick="saveSettings()">Simpan tetapan</button>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <div class="overlay show" id="loginOverlay"><div class="modal" id="loginBody"></div></div>
@@ -221,6 +271,86 @@ const TABLES = Array.from({length:12}, (_,i) => 'Meja ' + (i+1));
 const S = { worker:null, mode:'runcit', table:TABLES[0], cart:[], products:[], workers:[], category:'Semua', search:'', tab:'jualan', payMethod:'tunai' };
 let pinBuf = '', pinWorker = null;
 
+/* ---------- TETAPAN (disimpan dalam pelayar ini) ---------- */
+const SET_KEY = 'kasirpro_settings_v1';
+const DEF_SET = { shopName:'KASIRPRO', shopInfo:'', footer:'Terima kasih!', logo:'', paperMm:58, fontPx:11, fontFamily:'monospace', printerName:'Xprinter XP-58', scanGap:80, scanAuto:true };
+let CFG = { ...DEF_SET };
+try { CFG = { ...DEF_SET, ...(JSON.parse(localStorage.getItem(SET_KEY)) || {}) }; } catch(e) {}
+
+function saveCfg(){
+  try { localStorage.setItem(SET_KEY, JSON.stringify(CFG)); }
+  catch(e) { toast('Gagal simpan tetapan. Cuba logo yang lebih kecil.'); }
+}
+function renderSettings(){
+  document.getElementById('st_shopName').value = CFG.shopName;
+  document.getElementById('st_shopInfo').value = CFG.shopInfo;
+  document.getElementById('st_footer').value = CFG.footer;
+  document.getElementById('st_paper').value = String(CFG.paperMm);
+  document.getElementById('st_font').value = String(CFG.fontPx);
+  document.getElementById('st_family').value = CFG.fontFamily;
+  document.getElementById('st_printer').value = CFG.printerName;
+  document.getElementById('st_scanGap').value = CFG.scanGap;
+  document.getElementById('st_scanAuto').checked = !!CFG.scanAuto;
+  renderLogoPreview();
+}
+function renderLogoPreview(){
+  document.getElementById('logoPreview').innerHTML = CFG.logo
+    ? `<img src="${CFG.logo}" style="max-width:200px;max-height:100px;border:1px dashed var(--border);padding:6px;background:#fff">`
+    : '<span class="muted">Tiada logo</span>';
+}
+function saveSettings(silent){
+  CFG.shopName = document.getElementById('st_shopName').value.trim() || 'KASIRPRO';
+  CFG.shopInfo = document.getElementById('st_shopInfo').value;
+  CFG.footer = document.getElementById('st_footer').value.trim();
+  CFG.paperMm = parseInt(document.getElementById('st_paper').value, 10) || 58;
+  CFG.fontPx = parseInt(document.getElementById('st_font').value, 10) || 11;
+  CFG.fontFamily = document.getElementById('st_family').value;
+  CFG.printerName = document.getElementById('st_printer').value.trim();
+  CFG.scanGap = Math.min(500, Math.max(30, parseInt(document.getElementById('st_scanGap').value, 10) || 80));
+  CFG.scanAuto = document.getElementById('st_scanAuto').checked;
+  saveCfg();
+  if(!silent) toast('Tetapan disimpan');
+}
+function resetSettings(){
+  if(!confirm('Reset semua tetapan kepada asal? Logo juga akan dipadam.')) return;
+  CFG = { ...DEF_SET };
+  saveCfg(); renderSettings(); toast('Tetapan direset');
+}
+function onLogoPick(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  if(file.size > 3 * 1024 * 1024){ toast('Gambar terlalu besar (maksimum 3MB)'); input.value = ''; return; }
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, 384 / img.width);
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * scale);
+    c.height = Math.round(img.height * scale);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    const d = ctx.getImageData(0, 0, c.width, c.height);
+    const px = d.data;
+    for(let i = 0; i < px.length; i += 4){
+      const g = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
+      const v = g < 160 ? 0 : 255;
+      px[i] = px[i+1] = px[i+2] = v;
+    }
+    ctx.putImageData(d, 0, 0);
+    CFG.logo = c.toDataURL('image/png');
+    saveCfg(); renderLogoPreview(); input.value = '';
+    toast('Logo disimpan');
+    URL.revokeObjectURL(img.src);
+  };
+  img.onerror = () => toast('Fail gambar tidak sah');
+  img.src = URL.createObjectURL(file);
+}
+function removeLogo(){
+  CFG.logo = ''; saveCfg(); renderLogoPreview(); toast('Logo dipadam');
+}
+
+/* ---------- UTIliti ---------- */
 const rm = n => 'RM ' + Number(n).toFixed(2);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(msg){
@@ -267,6 +397,7 @@ async function pinKey(d){
 }
 async function startApp(){
   document.getElementById('whoami').textContent = S.worker.name + ' \u00b7 ' + S.worker.role;
+  document.getElementById('tabTetapan').style.display = S.worker.role === 'Pemilik' ? '' : 'none';
   await loadProducts();
   renderAll();
   setTab(S.tab);
@@ -293,13 +424,15 @@ function setMode(m){
   renderSell();
 }
 function setTab(t){
+  if(t==='tetapan' && (!S.worker || S.worker.role !== 'Pemilik')){ toast('Hanya Pemilik boleh ubah tetapan'); return; }
   S.tab = t;
-  ['jualan','stok','laporan'].forEach(x => {
+  ['jualan','stok','laporan','tetapan'].forEach(x => {
     document.getElementById('tab' + x[0].toUpperCase() + x.slice(1)).classList.toggle('on', x===t);
     document.getElementById('page' + x[0].toUpperCase() + x.slice(1)).style.display = x===t ? '' : 'none';
   });
   if(t==='stok') renderStock();
   if(t==='laporan') renderReports();
+  if(t==='tetapan') renderSettings();
 }
 function renderAll(){ renderSell(); renderStock(); }
 
@@ -329,23 +462,28 @@ function renderProducts(){
       <span class="name">${esc(p.name)}</span><span class="price">${rm(p.price)}</span><span class="stock ${cls}">${label}</span></button>`;
   }).join('');
 }
-// Scanner USB hantar kod diikuti Enter. Kalau kod sepadan barcode produk, terus tambah ke troli.
 function searchKey(e){
   if(e.key !== 'Enter') return;
   e.preventDefault();
   const code = S.search.trim();
   if(!code) return;
-  const p = S.products.find(x => x.barcode && x.barcode === code);
-  if(p){
-    addToCart(p.id);
-    toast('Ditambah: ' + p.name);
-  } else {
-    toast('Barcode tidak dijumpai: ' + code);
-  }
+  handleScan(code);
   S.search = '';
   document.getElementById('search').value = '';
   renderProducts();
   document.getElementById('search').focus();
+}
+function handleScan(code){
+  const p = S.products.find(x => x.barcode === code);
+  if(!p){ toast('Barcode tidak dijumpai: ' + code); return; }
+  if(!CFG.scanAuto){
+    S.search = code;
+    document.getElementById('search').value = code;
+    renderProducts();
+    return;
+  }
+  addToCart(p.id);
+  toast('Ditambah: ' + p.name);
 }
 function addToCart(id){
   const p = S.products.find(x => x.id===id); if(!p) return;
@@ -433,19 +571,44 @@ async function confirmPay(){
   renderSell();
   toast('Pembayaran berjaya · ' + data.invoice_no);
 }
-function printReceipt(s){
-  const r = document.getElementById('receipt');
-  r.innerHTML = `
-    <div class="r-center"><b>KASIRPRO</b><br>Resit Jualan</div>
-    <div>No: ${s.invoice_no}<br>Tarikh: ${new Date(s.time).toLocaleString('ms-MY')}${s.table?'<br>'+s.table:''}</div><hr>
+
+/* ---------- RESIT ---------- */
+function applyPrintStyle(){
+  let el = document.getElementById('dynPrint');
+  if(!el){ el = document.createElement('style'); el.id = 'dynPrint'; document.head.appendChild(el); }
+  el.textContent = `@media print{
+    @page{size:${CFG.paperMm}mm auto;margin:0}
+    #receipt{width:${CFG.paperMm}mm !important;font-size:${CFG.fontPx}px !important;font-family:${CFG.fontFamily} !important}
+  }`;
+}
+function receiptHTML(s){
+  const logo = CFG.logo ? `<div class="r-center"><img src="${CFG.logo}" style="max-width:100%;max-height:30mm"></div>` : '';
+  const info = CFG.shopInfo.trim() ? CFG.shopInfo.split('\n').filter(x => x.trim()).map(x => `<div class="r-center">${esc(x)}</div>`).join('') : '';
+  return `
+    ${logo}
+    <div class="r-center"><b>${esc(CFG.shopName)}</b><br>Resit Jualan</div>
+    ${info}
+    <div>No: ${esc(s.invoice_no)}<br>Tarikh: ${new Date(s.time).toLocaleString('ms-MY')}${s.table?'<br>'+esc(s.table):''}</div><hr>
     ${s.items.map(i => `<div class="r-line"><span>${esc(i.name)} x${i.qty}</span><span>${(i.price*i.qty).toFixed(2)}</span></div>`).join('')}<hr>
     <div class="r-line"><span>Subtotal</span><span>${Number(s.subtotal).toFixed(2)}</span></div>
     <div class="r-line"><span>Cukai 6%</span><span>${Number(s.tax).toFixed(2)}</span></div>
     <div class="r-line"><b>Jumlah</b><b>${Number(s.total).toFixed(2)}</b></div>
     <div class="r-line"><span>Bayaran (${esc(s.method)})</span><span>${Number(s.paid).toFixed(2)}</span></div>
     <div class="r-line"><span>Baki</span><span>${Number(s.change).toFixed(2)}</span></div><hr>
-    <div class="r-center">Terima kasih!</div>`;
+    <div class="r-center">${esc(CFG.footer)}</div>`;
+}
+function printReceipt(s){
+  applyPrintStyle();
+  document.getElementById('receipt').innerHTML = receiptHTML(s);
   window.print();
+}
+function testPrint(){
+  saveSettings(true);
+  printReceipt({
+    invoice_no:'TEST-0001', subtotal:10, tax:0.6, total:10.6, paid:20, change:9.4,
+    method:'tunai', table:null, time:new Date(),
+    items:[{ name:'Contoh produk', price:5, qty:2 }]
+  });
 }
 
 /* ---------- STOK ---------- */
@@ -538,64 +701,47 @@ async function addWorker(){
   await renderWorkers(); toast('Pekerja ditambah');
 }
 
-/* ---------- MULA ---------- */
-  /* ---------- PIN DARI KEYBOARD ---------- */
-document.addEventListener('keydown', e => {
-  const overlay = document.getElementById('loginOverlay');
-  if (!overlay.classList.contains('show')) return;
-  const isDigit = e.key >= '0' && e.key <= '9';
-
-  if (!pinWorker) {
-    // Di senarai pekerja: tekan 1, 2, 3... untuk pilih pekerja
-    if (isDigit) {
-      const idx = parseInt(e.key, 10) - 1;
-      if (idx >= 0 && idx < S.workers.length) {
-        e.preventDefault();
-        pickWorker(S.workers[idx].id);
-      }
-    }
-    return;
-  }
-
-  // Di skrin PIN
-  if (isDigit) { e.preventDefault(); pinKey(e.key); }
-  else if (e.key === 'Backspace') { e.preventDefault(); pinBack(); }
-  else if (e.key === 'Escape') { e.preventDefault(); pinReset(); }
-});
-  /* ---------- SCANNER GLOBAL ---------- */
+/* ---------- SCANNER GLOBAL ---------- */
 let scanBuf = '', scanLast = 0;
 document.addEventListener('keydown', e => {
   const now = Date.now();
   const tag = (e.target.tagName || '').toLowerCase();
-  // Biar medan lain (harga, stok, barcode produk, PIN) berfungsi seperti biasa
-  if (e.target.id === 'search') return;              // carian sudah ada searchKey()
+  if (e.target.id === 'search') return;
   if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
-  // Hanya terima scan bila di tab Jualan dan tiada modal terbuka
   if (S.tab !== 'jualan') return;
   if (document.getElementById('payOverlay').classList.contains('show')) return;
   if (document.getElementById('loginOverlay').classList.contains('show')) return;
 
-  // Scanner menaip sangat pantas. Jika jeda lebih 80ms, anggap ia input baru.
-  if (now - scanLast > 80) scanBuf = '';
+  if (now - scanLast > CFG.scanGap) scanBuf = '';
   scanLast = now;
 
   if (e.key === 'Enter') {
     const code = scanBuf.trim();
     scanBuf = '';
-    if (code.length >= 4) {
-      e.preventDefault();          // elak butang yang sedang fokus ditekan
-      handleScan(code);
-    }
+    if (code.length >= 4) { e.preventDefault(); handleScan(code); }
     return;
   }
   if (e.key.length === 1) scanBuf += e.key;
 });
-function handleScan(code){
-  const p = S.products.find(x => x.barcode === code);
-  if(!p){ toast('Barcode tidak dijumpai: ' + code); return; }
-  addToCart(p.id);
-  toast('Ditambah: ' + p.name);
-}
+
+/* ---------- PIN DARI KEYBOARD ---------- */
+document.addEventListener('keydown', e => {
+  const overlay = document.getElementById('loginOverlay');
+  if (!overlay.classList.contains('show')) return;
+  const isDigit = e.key >= '0' && e.key <= '9';
+  if (!pinWorker) {
+    if (isDigit) {
+      const idx = parseInt(e.key, 10) - 1;
+      if (idx >= 0 && idx < S.workers.length) { e.preventDefault(); pickWorker(S.workers[idx].id); }
+    }
+    return;
+  }
+  if (isDigit) { e.preventDefault(); pinKey(e.key); }
+  else if (e.key === 'Backspace') { e.preventDefault(); pinBack(); }
+  else if (e.key === 'Escape') { e.preventDefault(); pinReset(); }
+});
+
+/* ---------- MULA ---------- */
 showLogin();
 </script>
 </body>
