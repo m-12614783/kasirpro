@@ -539,6 +539,29 @@ async function addWorker(){
 }
 
 /* ---------- MULA ---------- */
+  /* ---------- PIN DARI KEYBOARD ---------- */
+document.addEventListener('keydown', e => {
+  const overlay = document.getElementById('loginOverlay');
+  if (!overlay.classList.contains('show')) return;
+  const isDigit = e.key >= '0' && e.key <= '9';
+
+  if (!pinWorker) {
+    // Di senarai pekerja: tekan 1, 2, 3... untuk pilih pekerja
+    if (isDigit) {
+      const idx = parseInt(e.key, 10) - 1;
+      if (idx >= 0 && idx < S.workers.length) {
+        e.preventDefault();
+        pickWorker(S.workers[idx].id);
+      }
+    }
+    return;
+  }
+
+  // Di skrin PIN
+  if (isDigit) { e.preventDefault(); pinKey(e.key); }
+  else if (e.key === 'Backspace') { e.preventDefault(); pinBack(); }
+  else if (e.key === 'Escape') { e.preventDefault(); pinReset(); }
+});
   /* ---------- SCANNER GLOBAL ---------- */
 let scanBuf = '', scanLast = 0;
 document.addEventListener('keydown', e => {
