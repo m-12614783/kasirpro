@@ -84,9 +84,9 @@ td input{width:110px;padding:6px 8px}
 #receipt{display:none}
 @media print{
   @page{size:58mm auto;margin:0}
-  body *{visibility:hidden}
-  #receipt,#receipt *{visibility:visible}
-  #receipt{display:block;position:absolute;left:0;top:0;width:58mm;padding:2mm;font-family:monospace;font-size:11px;color:#000;background:#fff}
+  html,body{height:auto !important;overflow:visible !important;background:#fff !important}
+  body > *:not(#receipt){display:none !important}
+  #receipt{display:block !important;position:static !important;width:58mm;padding:2mm 2mm 8mm;margin:0;font-family:monospace;font-size:11px;color:#000;background:#fff}
 }
 .r-line{display:flex;justify-content:space-between;gap:4px}
 .r-center{text-align:center}
