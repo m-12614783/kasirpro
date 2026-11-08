@@ -54,6 +54,7 @@ input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--border
 .totals{margin-top:12px;font-size:14px}
 .totals div{display:flex;justify-content:space-between;padding:3px 0}
 .totals .grand{font-size:20px;font-weight:800;color:var(--brand);border-top:2px solid var(--border);margin-top:6px;padding-top:8px}
+.totals .disc{color:var(--ok)}
 .muted{color:var(--muted);font-size:13px}
 .empty{text-align:center;color:var(--muted);padding:30px 10px}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -65,6 +66,7 @@ td input{width:110px;padding:6px 8px}
 .kpi small{color:var(--muted);font-size:12px;text-transform:uppercase;font-weight:600}
 .kpi div{font-size:24px;font-weight:800;margin-top:4px}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:var(--border)}
+.cust{border:1px dashed var(--border);border-radius:12px;padding:10px;margin-bottom:12px}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
 .overlay.show{display:flex}
 .modal{background:var(--card);border-radius:18px;padding:22px;width:100%;max-width:440px;max-height:92vh;overflow:auto}
@@ -108,6 +110,7 @@ td input{width:110px;padding:6px 8px}
 <nav>
   <button id="tabJualan" class="on" onclick="setTab('jualan')">Jualan</button>
   <button id="tabStok" onclick="setTab('stok')">Stok</button>
+  <button id="tabPelanggan" onclick="setTab('pelanggan')">Pelanggan</button>
   <button id="tabLaporan" onclick="setTab('laporan')">Laporan</button>
   <button id="tabTetapan" style="display:none" onclick="setTab('tetapan')">Tetapan</button>
 </nav>
@@ -122,10 +125,12 @@ td input{width:110px;padding:6px 8px}
     </div>
     <div class="card">
       <div id="tableRow" style="display:none;margin-bottom:12px"><select id="tableSelect" onchange="S.table=this.value"></select></div>
+      <div id="custBox"></div>
       <h3 style="margin-top:0">Pesanan semasa</h3>
       <div id="cartLines"></div>
       <div class="totals">
         <div><span>Subtotal</span><span id="subtotal">RM 0.00</span></div>
+        <div id="discRow" class="disc" style="display:none"><span>Diskaun mata</span><span id="disc">-RM 0.00</span></div>
         <div><span>Cukai (6%)</span><span id="tax">RM 0.00</span></div>
         <div class="grand"><span>Jumlah</span><span id="grand">RM 0.00</span></div>
       </div>
@@ -153,6 +158,25 @@ td input{width:110px;padding:6px 8px}
         <div class="field"><label>Harga (RM)</label><input id="np_price" type="number" step="0.10" min="0"></div>
         <div class="field"><label>Stok awal</label><input id="np_stock" type="number" min="0"></div>
         <button class="btn block" onclick="addProduct()">Simpan produk</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="pagePelanggan" style="display:none">
+    <div class="grid2">
+      <div class="card">
+        <h3 style="margin-top:0">Senarai pelanggan</h3>
+        <div class="tools"><input id="cs_q" placeholder="Cari nama atau telefon..." oninput="loadCustomerList()"></div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>Nama</th><th>Telefon</th><th>Mata</th><th>Jumlah belanja</th></tr></thead>
+          <tbody id="custRows"></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Tambah pelanggan</h3>
+        <div class="field"><label>Nama</label><input id="cs_name"></div>
+        <div class="field"><label>Telefon</label><input id="cs_phone" inputmode="tel" placeholder="Contoh: 0123456789"></div>
+        <button class="btn block" onclick="addCustomerPage()">Simpan pelanggan</button>
       </div>
     </div>
   </section>
@@ -229,6 +253,19 @@ td input{width:110px;padding:6px 8px}
         </div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3 style="margin-top:0">Program loyalti</h3>
+      <label style="display:flex;gap:8px;align-items:center;margin-bottom:12px;font-size:14px">
+        <input type="checkbox" id="lo_enabled" style="width:auto"> Aktifkan program loyalti
+      </label>
+      <div class="grid2">
+        <div class="field"><label>Mata per RM1 belanja</label><input id="lo_earn" type="number" min="0" step="0.1"></div>
+        <div class="field"><label>Nilai 1 mata (RM)</label><input id="lo_value" type="number" min="0" step="0.01"></div>
+      </div>
+      <div class="hint">Contoh: 1 mata per RM1 dan 1 mata bernilai RM0.05 bermakna 100 mata = diskaun RM5.</div>
+      <button class="btn block" onclick="saveLoyalty()">Simpan loyalti</button>
+    </div>
   </section>
 </main>
 
@@ -238,7 +275,8 @@ td input{width:110px;padding:6px 8px}
   <div class="modal">
     <h2>Pembayaran</h2>
     <div class="muted">Jumlah perlu dibayar</div>
-    <div style="font-size:30px;font-weight:800;color:var(--brand);margin:4px 0 14px" id="payTotal">RM 0.00</div>
+    <div style="font-size:30px;font-weight:800;color:var(--brand);margin:4px 0 4px" id="payTotal">RM 0.00</div>
+    <div class="muted" id="payNote" style="margin-bottom:12px"></div>
     <div class="pm">
       <button id="pmTunai" class="on" onclick="setPayMethod('tunai')">Tunai</button>
       <button id="pmKad" onclick="setPayMethod('kad')">Kad</button>
@@ -258,6 +296,21 @@ td input{width:110px;padding:6px 8px}
   </div>
 </div>
 
+<div class="overlay" id="custOverlay">
+  <div class="modal">
+    <h2>Pilih pelanggan</h2>
+    <div class="field"><input id="cust_q" placeholder="Cari nama atau telefon..." oninput="searchCustomers()"></div>
+    <div id="cust_list" style="max-height:260px;overflow:auto;margin-bottom:12px"></div>
+    <h3 style="margin:8px 0">Pelanggan baru</h3>
+    <div class="field"><input id="cn_name" placeholder="Nama"></div>
+    <div class="field"><input id="cn_phone" inputmode="tel" placeholder="Telefon (contoh 0123456789)"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn ghost" style="flex:1" onclick="closeCustPicker()">Tutup</button>
+      <button class="btn ok" style="flex:2" onclick="addCustomerFromPicker()">Simpan & pilih</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <div id="receipt"></div>
 
@@ -268,8 +321,10 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const TAX = 0.06;
 const TABLES = Array.from({length:12}, (_,i) => 'Meja ' + (i+1));
-const S = { worker:null, mode:'runcit', table:TABLES[0], cart:[], products:[], workers:[], category:'Semua', search:'', tab:'jualan', payMethod:'tunai' };
+const S = { worker:null, mode:'runcit', table:TABLES[0], cart:[], products:[], workers:[], category:'Semua', search:'', tab:'jualan', payMethod:'tunai',
+  customer:null, redeem:0, loyalty:{ enabled:true, earn_per_rm:1, point_value:0.05 } };
 let pinBuf = '', pinWorker = null;
+const isOwner = () => S.worker && S.worker.role === 'Pemilik';
 
 /* ---------- TETAPAN (disimpan dalam pelayar ini) ---------- */
 const SET_KEY = 'kasirpro_settings_v1';
@@ -291,6 +346,9 @@ function renderSettings(){
   document.getElementById('st_printer').value = CFG.printerName;
   document.getElementById('st_scanGap').value = CFG.scanGap;
   document.getElementById('st_scanAuto').checked = !!CFG.scanAuto;
+  document.getElementById('lo_enabled').checked = !!S.loyalty.enabled;
+  document.getElementById('lo_earn').value = S.loyalty.earn_per_rm;
+  document.getElementById('lo_value').value = S.loyalty.point_value;
   renderLogoPreview();
 }
 function renderLogoPreview(){
@@ -350,7 +408,7 @@ function removeLogo(){
   CFG.logo = ''; saveCfg(); renderLogoPreview(); toast('Logo dipadam');
 }
 
-/* ---------- UTIliti ---------- */
+/* ---------- UTILITI ---------- */
 const rm = n => 'RM ' + Number(n).toFixed(2);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(msg){
@@ -360,7 +418,7 @@ function toast(msg){
 
 /* ---------- LOG MASUK ---------- */
 async function showLogin(){
-  S.worker = null; pinWorker = null; pinBuf = '';
+  S.worker = null; S.customer = null; S.redeem = 0; pinWorker = null; pinBuf = '';
   document.getElementById('loginOverlay').classList.add('show');
   const { data, error } = await sb.rpc('list_workers');
   if(error){ toast('Gagal sambung ke pangkalan data: ' + error.message); }
@@ -397,12 +455,13 @@ async function pinKey(d){
 }
 async function startApp(){
   document.getElementById('whoami').textContent = S.worker.name + ' \u00b7 ' + S.worker.role;
-  document.getElementById('tabTetapan').style.display = S.worker.role === 'Pemilik' ? '' : 'none';
+  document.getElementById('tabTetapan').style.display = isOwner() ? '' : 'none';
+  await loadLoyalty();
   await loadProducts();
   renderAll();
   setTab(S.tab);
 }
-function logout(){ S.cart = []; closePay(); showLogin(); }
+function logout(){ S.cart = []; S.customer = null; S.redeem = 0; closePay(); showLogin(); }
 
 /* ---------- DATA ---------- */
 async function loadProducts(){
@@ -415,6 +474,26 @@ async function loadSales(){
   if(error){ toast('Gagal muat jualan: ' + error.message); return []; }
   return data || [];
 }
+async function loadLoyalty(){
+  const { data } = await sb.from('app_settings').select('value').eq('key','loyalty').maybeSingle();
+  const v = (data && data.value) || {};
+  S.loyalty = {
+    enabled: v.enabled !== false,
+    earn_per_rm: Number(v.earn_per_rm ?? 1),
+    point_value: Number(v.point_value ?? 0.05)
+  };
+}
+async function saveLoyalty(){
+  if(!isOwner()){ toast('Hanya Pemilik boleh ubah loyalti'); return; }
+  const enabled = document.getElementById('lo_enabled').checked;
+  const earn = parseFloat(document.getElementById('lo_earn').value);
+  const val = parseFloat(document.getElementById('lo_value').value);
+  if(isNaN(earn) || earn < 0 || isNaN(val) || val < 0){ toast('Nilai loyalti tidak sah'); return; }
+  const value = { enabled, earn_per_rm: earn, point_value: val };
+  const { error } = await sb.from('app_settings').upsert({ key:'loyalty', value });
+  if(error){ toast(error.message); return; }
+  S.loyalty = value; renderSell(); toast('Loyalti disimpan');
+}
 
 /* ---------- MOD & TAB ---------- */
 function setMode(m){
@@ -424,14 +503,15 @@ function setMode(m){
   renderSell();
 }
 function setTab(t){
-  if(t==='tetapan' && (!S.worker || S.worker.role !== 'Pemilik')){ toast('Hanya Pemilik boleh ubah tetapan'); return; }
+  if(t==='tetapan' && !isOwner()){ toast('Hanya Pemilik boleh ubah tetapan'); return; }
   S.tab = t;
-  ['jualan','stok','laporan','tetapan'].forEach(x => {
+  ['jualan','stok','pelanggan','laporan','tetapan'].forEach(x => {
     document.getElementById('tab' + x[0].toUpperCase() + x.slice(1)).classList.toggle('on', x===t);
     document.getElementById('page' + x[0].toUpperCase() + x.slice(1)).style.display = x===t ? '' : 'none';
   });
   if(t==='stok') renderStock();
   if(t==='laporan') renderReports();
+  if(t==='pelanggan') loadCustomerList();
   if(t==='tetapan') renderSettings();
 }
 function renderAll(){ renderSell(); renderStock(); }
@@ -440,6 +520,7 @@ function renderAll(){ renderSell(); renderStock(); }
 function renderSell(){
   document.getElementById('tableRow').style.display = S.mode==='restoran' ? '' : 'none';
   document.getElementById('tableSelect').innerHTML = TABLES.map(t => `<option ${t===S.table?'selected':''}>${t}</option>`).join('');
+  renderCustomer();
   renderCats(); renderProducts(); renderCart();
 }
 function renderCats(){
@@ -462,6 +543,71 @@ function renderProducts(){
       <span class="name">${esc(p.name)}</span><span class="price">${rm(p.price)}</span><span class="stock ${cls}">${label}</span></button>`;
   }).join('');
 }
+
+/* ---------- PELANGGAN & LOYALTI (JUALAN) ---------- */
+function renderCustomer(){
+  const el = document.getElementById('custBox');
+  if(!S.customer){
+    el.innerHTML = `<div class="cust"><button class="btn ghost block" onclick="openCustPicker()">+ Pilih pelanggan</button></div>`;
+    return;
+  }
+  const c = S.customer;
+  el.innerHTML = `<div class="cust">
+    <div class="line" style="border:0;padding:0">
+      <div class="info"><b>${esc(c.name)}</b><small>${esc(c.phone||'-')} · Mata: ${c.points}</small></div>
+      <button class="btn ghost" style="padding:6px 10px" onclick="clearCustomer()">Buang</button>
+    </div>
+    ${S.loyalty.enabled ? `<div class="field" style="margin:8px 0 0">
+      <label>Tebus mata (maks ${c.points} · RM${S.loyalty.point_value.toFixed(2)} setiap mata)</label>
+      <input type="number" min="0" max="${c.points}" value="${S.redeem}" onchange="setRedeem(this.value)">
+    </div>` : ''}
+  </div>`;
+}
+function openCustPicker(){
+  document.getElementById('custOverlay').classList.add('show');
+  document.getElementById('cust_q').value = '';
+  searchCustomers();
+  setTimeout(() => document.getElementById('cust_q').focus(), 50);
+}
+function closeCustPicker(){ document.getElementById('custOverlay').classList.remove('show'); }
+async function searchCustomers(){
+  const q = document.getElementById('cust_q').value.trim().replace(/[,()]/g,' ');
+  let query = sb.from('customers').select('id,name,phone,points').order('name').limit(8);
+  if(q) query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
+  const { data, error } = await query;
+  if(error){ toast(error.message); return; }
+  document.getElementById('cust_list').innerHTML = (data||[]).length
+    ? data.map(c => `<div class="line"><div class="info"><b>${esc(c.name)}</b><small>${esc(c.phone||'-')} · ${c.points} mata</small></div>
+        <button class="btn" style="padding:6px 12px" onclick="pickCustomer(${c.id})">Pilih</button></div>`).join('')
+    : '<div class="empty">Tiada pelanggan dijumpai</div>';
+}
+async function pickCustomer(id){
+  const { data, error } = await sb.from('customers').select('id,name,phone,points').eq('id', id).single();
+  if(error){ toast(error.message); return; }
+  S.customer = data; S.redeem = 0;
+  closeCustPicker(); renderSell(); toast('Pelanggan dipilih: ' + data.name);
+}
+async function addCustomerFromPicker(){
+  const name = document.getElementById('cn_name').value.trim();
+  const phone = document.getElementById('cn_phone').value.trim() || null;
+  if(!name){ toast('Masukkan nama pelanggan'); return; }
+  const { data, error } = await sb.from('customers').insert({ name, phone }).select('id,name,phone,points').single();
+  if(error){ toast(error.code==='23505' ? 'Nombor telefon sudah didaftarkan' : error.message); return; }
+  document.getElementById('cn_name').value = ''; document.getElementById('cn_phone').value = '';
+  S.customer = data; S.redeem = 0;
+  closeCustPicker(); renderSell(); toast('Pelanggan baru ditambah');
+}
+function clearCustomer(){ S.customer = null; S.redeem = 0; renderSell(); }
+function setRedeem(v){
+  const max = S.customer ? S.customer.points : 0;
+  const n = Math.max(0, Math.min(Math.floor(Number(v) || 0), max));
+  S.redeem = n;
+  renderSell();
+}
+function redeemValue(){
+  return (S.customer && S.loyalty.enabled) ? S.redeem * S.loyalty.point_value : 0;
+}
+
 function searchKey(e){
   if(e.key !== 'Enter') return;
   e.preventDefault();
@@ -502,8 +648,9 @@ function changeQty(id, d){
 }
 function totals(){
   const sub = S.cart.reduce((s,c) => s + c.price*c.qty, 0);
-  const tax = Math.round(sub*TAX*100)/100;
-  return { sub, tax, grand: sub+tax };
+  const disc = Math.min(sub, Math.round(redeemValue()*100)/100);
+  const tax = Math.round((sub-disc)*TAX*100)/100;
+  return { sub, disc, tax, grand: sub-disc+tax };
 }
 function renderCart(){
   document.getElementById('cartLines').innerHTML = S.cart.length ? S.cart.map(c => `
@@ -514,6 +661,8 @@ function renderCart(){
     </div>`).join('') : '<div class="empty">Pesanan kosong</div>';
   const t = totals();
   document.getElementById('subtotal').textContent = rm(t.sub);
+  document.getElementById('discRow').style.display = t.disc > 0 ? '' : 'none';
+  document.getElementById('disc').textContent = '-' + rm(t.disc);
   document.getElementById('tax').textContent = rm(t.tax);
   document.getElementById('grand').textContent = rm(t.grand);
   document.getElementById('payBtn').disabled = !S.cart.length;
@@ -525,6 +674,7 @@ function openPay(){
   if(!S.cart.length) return;
   const t = totals();
   document.getElementById('payTotal').textContent = rm(t.grand);
+  document.getElementById('payNote').textContent = t.disc > 0 ? 'Termasuk diskaun mata: -' + rm(t.disc) : '';
   const opts = [t.grand, Math.ceil(t.grand), Math.ceil(t.grand/5)*5, Math.ceil(t.grand/10)*10]
     .filter((v,i,a) => a.indexOf(v)===i).slice(0,4);
   document.getElementById('quickBtns').innerHTML = opts.map(v => `<button onclick="setCash(${v})">${rm(v)}</button>`).join('');
@@ -554,18 +704,20 @@ async function confirmPay(){
   const paid = S.payMethod==='tunai' ? got : t.grand;
   if(S.payMethod==='tunai' && paid < t.grand){ toast('Jumlah diterima tidak mencukupi'); return; }
   const btn = document.getElementById('confirmBtn'); btn.disabled = true;
-  const { data, error } = await sb.rpc('complete_sale', {
+  const { data, error } = await sb.rpc('complete_sale_v2', {
     p_worker_id: S.worker.id,
     p_mode: S.mode,
     p_table: S.mode==='restoran' ? S.table : null,
     p_method: S.payMethod,
     p_paid: paid,
-    p_items: S.cart.map(c => ({ id:c.id, qty:c.qty }))
+    p_items: S.cart.map(c => ({ id:c.id, qty:c.qty })),
+    p_customer_id: S.customer ? S.customer.id : null,
+    p_redeem: S.customer ? S.redeem : 0
   });
   btn.disabled = false;
   if(error){ toast(error.message); await loadProducts(); renderSell(); return; }
   printReceipt({ ...data, items: S.cart.map(c => ({...c})), method: S.payMethod, paid, table: S.mode==='restoran' ? S.table : null, time: new Date() });
-  S.cart = [];
+  S.cart = []; S.customer = null; S.redeem = 0;
   closePay();
   await loadProducts();
   renderSell();
@@ -584,17 +736,25 @@ function applyPrintStyle(){
 function receiptHTML(s){
   const logo = CFG.logo ? `<div class="r-center"><img src="${CFG.logo}" style="max-width:100%;max-height:30mm"></div>` : '';
   const info = CFG.shopInfo.trim() ? CFG.shopInfo.split('\n').filter(x => x.trim()).map(x => `<div class="r-center">${esc(x)}</div>`).join('') : '';
+  const cust = s.customer ? `<div>Pelanggan: ${esc(s.customer)}</div>` : '';
+  const discRow = s.discount > 0 ? `<div class="r-line"><span>Diskaun mata</span><span>-${Number(s.discount).toFixed(2)}</span></div>` : '';
+  const loyal = s.customer ? `<hr>
+    <div class="r-line"><span>Mata diperoleh</span><span>+${s.earned||0}</span></div>
+    <div class="r-line"><span>Baki mata</span><span>${s.balance ?? 0}</span></div>` : '';
   return `
     ${logo}
     <div class="r-center"><b>${esc(CFG.shopName)}</b><br>Resit Jualan</div>
     ${info}
-    <div>No: ${esc(s.invoice_no)}<br>Tarikh: ${new Date(s.time).toLocaleString('ms-MY')}${s.table?'<br>'+esc(s.table):''}</div><hr>
+    <div>No: ${esc(s.invoice_no)}<br>Tarikh: ${new Date(s.time).toLocaleString('ms-MY')}${s.table?'<br>'+esc(s.table):''}</div>
+    ${cust}<hr>
     ${s.items.map(i => `<div class="r-line"><span>${esc(i.name)} x${i.qty}</span><span>${(i.price*i.qty).toFixed(2)}</span></div>`).join('')}<hr>
     <div class="r-line"><span>Subtotal</span><span>${Number(s.subtotal).toFixed(2)}</span></div>
+    ${discRow}
     <div class="r-line"><span>Cukai 6%</span><span>${Number(s.tax).toFixed(2)}</span></div>
     <div class="r-line"><b>Jumlah</b><b>${Number(s.total).toFixed(2)}</b></div>
     <div class="r-line"><span>Bayaran (${esc(s.method)})</span><span>${Number(s.paid).toFixed(2)}</span></div>
-    <div class="r-line"><span>Baki</span><span>${Number(s.change).toFixed(2)}</span></div><hr>
+    <div class="r-line"><span>Baki</span><span>${Number(s.change).toFixed(2)}</span></div>
+    ${loyal}<hr>
     <div class="r-center">${esc(CFG.footer)}</div>`;
 }
 function printReceipt(s){
@@ -605,7 +765,7 @@ function printReceipt(s){
 function testPrint(){
   saveSettings(true);
   printReceipt({
-    invoice_no:'TEST-0001', subtotal:10, tax:0.6, total:10.6, paid:20, change:9.4,
+    invoice_no:'TEST-0001', subtotal:10, discount:0, tax:0.6, total:10.6, paid:20, change:9.4,
     method:'tunai', table:null, time:new Date(),
     items:[{ name:'Contoh produk', price:5, qty:2 }]
   });
@@ -654,6 +814,27 @@ async function addProduct(){
   await loadProducts(); renderAll(); toast('Produk ditambah');
 }
 
+/* ---------- PELANGGAN (TAB) ---------- */
+async function loadCustomerList(){
+  const q = document.getElementById('cs_q').value.trim().replace(/[,()]/g,' ');
+  let query = sb.from('customers').select('*').order('name').limit(200);
+  if(q) query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
+  const { data, error } = await query;
+  if(error){ toast(error.message); return; }
+  document.getElementById('custRows').innerHTML = (data||[]).length
+    ? data.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.phone||'-')}</td><td><span class="badge">${c.points}</span></td><td>${rm(c.total_spent)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="empty">Tiada pelanggan</td></tr>';
+}
+async function addCustomerPage(){
+  const name = document.getElementById('cs_name').value.trim();
+  const phone = document.getElementById('cs_phone').value.trim() || null;
+  if(!name){ toast('Masukkan nama pelanggan'); return; }
+  const { error } = await sb.from('customers').insert({ name, phone });
+  if(error){ toast(error.code==='23505' ? 'Nombor telefon sudah didaftarkan' : error.message); return; }
+  document.getElementById('cs_name').value = ''; document.getElementById('cs_phone').value = '';
+  await loadCustomerList(); toast('Pelanggan ditambah');
+}
+
 /* ---------- LAPORAN ---------- */
 async function renderReports(){
   const sales = await loadSales();
@@ -675,16 +856,15 @@ async function renderReports(){
   const recent = sales.slice(0,8);
   document.getElementById('saleList').innerHTML = recent.length
     ? recent.map(s => `<div class="line"><div class="info"><b>${esc(s.invoice_no)}${s.table_name?' · '+esc(s.table_name):''}</b>
-        <small>${new Date(s.created_at).toLocaleTimeString('ms-MY',{hour:'2-digit',minute:'2-digit'})} · ${esc(s.payment_method)} · ${esc(s.worker_name||'-')}</small></div>
+        <small>${new Date(s.created_at).toLocaleTimeString('ms-MY',{hour:'2-digit',minute:'2-digit'})} · ${esc(s.payment_method)} · ${esc(s.worker_name||'-')}${s.customer_name?' · '+esc(s.customer_name):''}</small></div>
         <div style="font-weight:700">${rm(s.total)}</div></div>`).join('')
     : '<div class="empty">Belum ada transaksi</div>';
 
   await renderWorkers();
 }
 async function renderWorkers(){
-  const isOwner = S.worker && S.worker.role==='Pemilik';
-  document.getElementById('workersCard').style.display = isOwner ? '' : 'none';
-  if(!isOwner) return;
+  document.getElementById('workersCard').style.display = isOwner() ? '' : 'none';
+  if(!isOwner()) return;
   const { data } = await sb.rpc('list_workers');
   S.workers = data || [];
   document.getElementById('workerRows').innerHTML = S.workers.map(w =>
@@ -710,6 +890,7 @@ document.addEventListener('keydown', e => {
   if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
   if (S.tab !== 'jualan') return;
   if (document.getElementById('payOverlay').classList.contains('show')) return;
+  if (document.getElementById('custOverlay').classList.contains('show')) return;
   if (document.getElementById('loginOverlay').classList.contains('show')) return;
 
   if (now - scanLast > CFG.scanGap) scanBuf = '';
